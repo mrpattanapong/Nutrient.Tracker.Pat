@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nutrient Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Kanit', 'Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .jar-liquid {
+      transition: height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.5s ease;
+    }
+    .glass-highlight {
+      background: linear-gradient(90deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.02) 60%, transparent 100%);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen py-6 px-4 sm:px-6 lg:px-8 font-sans antialiased selection:bg-amber-500 selection:text-slate-950">
+
+  <!-- Toast แจ้งเตือนส่งข้อมูล -->
+  <div id="toast" class="fixed top-5 right-5 z-50 transform translate-y-[-150%] opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-3 bg-emerald-500 text-slate-950 px-4 py-3 rounded-2xl shadow-xl font-medium text-sm">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+    <span id="toast-msg">บันทึกสำเร็จ</span>
+  </div>
+
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-rose-400 to-sky-400">
+        Nutrient Tracker
+        </h1>
+        <p class="text-slate-400 text-xs sm:text-sm mt-0.5">ระบบคำนวณสารอาหารและสำรองข้อมูลอัตโนมัติ 23:59 น.</p>
+      </div>
+
+      <!-- สถานะการ Sync + วันที่ -->
+      <div class="flex items-center gap-2">
+        <div id="sync-status" class="flex items-center gap-1.5 text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-slate-400">
+          <span id="sync-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+          <span id="sync-text">รอโหลด...</span>
+        </div>
+        <button onclick="fetchSheetData()" title="ดึงข้อมูลล่าสุดจาก Google Sheets" class="p-2 text-slate-400 hover:text-amber-400 hover:bg-slate-900 rounded-xl transition border border-transparent hover:border-slate-800">
+          <svg id="sync-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      
+      <!-- ฝั่งซ้าย: โหลสารอาหาร 4 กระปุก -->
+      <section class="lg:col-span-7 bg-slate-900/60 border border-slate-800/80 p-5 sm:p-7 rounded-3xl backdrop-blur-xl shadow-2xl space-y-6">
+        <div class="flex items-center justify-between">
+          <h2 class="text-base sm:text-lg font-bold text-slate-200">สัดส่วนในโหลแก้ว</h2>
+          <span class="text-xs text-slate-500">จำกัดความสูงโหลที่ 100%</span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          
+          <!-- Calories -->
+          <div class="flex flex-col items-center bg-slate-950/40 p-3 rounded-2xl border border-slate-800/50">
+            <span class="text-xs font-semibold text-amber-400 mb-2">Calories</span>
+            <div class="relative w-16 sm:w-20 h-44 sm:h-52 bg-slate-950/90 border-2 border-slate-700/80 rounded-b-2xl rounded-t-lg overflow-hidden flex flex-col justify-end shadow-inner">
+              <div class="absolute inset-0 glass-highlight pointer-events-none z-10"></div>
+              <div id="jar-cal" class="jar-liquid w-full bg-gradient-to-t from-amber-600 to-amber-400 flex items-center justify-center font-bold text-[11px] text-slate-950" style="height: 0%;">0%</div>
+            </div>
+            <div class="text-center mt-3 w-full">
+              <p id="txt-cal" class="text-[11px] text-slate-400 font-mono">0 / 2000</p>
+              <p id="diff-cal" class="text-[10px] mt-0.5 truncate text-slate-500">ขาด 2000</p>
+            </div>
+          </div>
+
+          <!-- Protein -->
+          <div class="flex flex-col items-center bg-slate-950/40 p-3 rounded-2xl border border-slate-800/50">
+            <span class="text-xs font-semibold text-emerald-400 mb-2">Protein</span>
+            <div class="relative w-16 sm:w-20 h-44 sm:h-52 bg-slate-950/90 border-2 border-slate-700/80 rounded-b-2xl rounded-t-lg overflow-hidden flex flex-col justify-end shadow-inner">
+              <div class="absolute inset-0 glass-highlight pointer-events-none z-10"></div>
+              <div id="jar-protein" class="jar-liquid w-full bg-gradient-to-t from-emerald-600 to-emerald-400 flex items-center justify-center font-bold text-[11px] text-slate-950" style="height: 0%;">0%</div>
+            </div>
+            <div class="text-center mt-3 w-full">
+              <p id="txt-protein" class="text-[11px] text-slate-400 font-mono">0 / 140g</p>
+              <p id="diff-protein" class="text-[10px] mt-0.5 truncate text-slate-500">ขาด 140g</p>
+            </div>
+          </div>
+
+          <!-- Fat -->
+          <div class="flex flex-col items-center bg-slate-950/40 p-3 rounded-2xl border border-slate-800/50">
+            <span class="text-xs font-semibold text-rose-400 mb-2">Fat</span>
+            <div class="relative w-16 sm:w-20 h-44 sm:h-52 bg-slate-950/90 border-2 border-slate-700/80 rounded-b-2xl rounded-t-lg overflow-hidden flex flex-col justify-end shadow-inner">
+              <div class="absolute inset-0 glass-highlight pointer-events-none z-10"></div>
+              <div id="jar-fat" class="jar-liquid w-full bg-gradient-to-t from-rose-600 to-rose-400 flex items-center justify-center font-bold text-[11px] text-white" style="height: 0%;">0%</div>
+            </div>
+            <div class="text-center mt-3 w-full">
+              <p id="txt-fat" class="text-[11px] text-slate-400 font-mono">0 / 60g</p>
+              <p id="diff-fat" class="text-[10px] mt-0.5 truncate text-slate-500">ขาด 60g</p>
+            </div>
+          </div>
+
+          <!-- Carb -->
+          <div class="flex flex-col items-center bg-slate-950/40 p-3 rounded-2xl border border-slate-800/50">
+            <span class="text-xs font-semibold text-sky-400 mb-2">Carb</span>
+            <div class="relative w-16 sm:w-20 h-44 sm:h-52 bg-slate-950/90 border-2 border-slate-700/80 rounded-b-2xl rounded-t-lg overflow-hidden flex flex-col justify-end shadow-inner">
+              <div class="absolute inset-0 glass-highlight pointer-events-none z-10"></div>
+              <div id="jar-carb" class="jar-liquid w-full bg-gradient-to-t from-sky-600 to-sky-400 flex items-center justify-center font-bold text-[11px] text-slate-950" style="height: 0%;">0%</div>
+            </div>
+            <div class="text-center mt-3 w-full">
+              <p id="txt-carb" class="text-[11px] text-slate-400 font-mono">0 / 250g</p>
+              <p id="diff-carb" class="text-[10px] mt-0.5 truncate text-slate-500">ขาด 250g</p>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ฝั่งขวา: ฟอร์มกรอกอาหารและรายการล่าสุด -->
+      <section class="lg:col-span-5 space-y-6">
+        
+        <div class="bg-slate-900/60 border border-slate-800/80 p-5 sm:p-6 rounded-3xl backdrop-blur-xl shadow-2xl">
+          <h2 class="text-base sm:text-lg font-bold text-slate-200 mb-4">บันทึกมื้ออาหาร</h2>
+          
+          <form id="food-form" class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1.5">ชื่อเมนูอาหาร</label>
+              <input type="text" id="in-food" required placeholder="เช่น อกไก่ย่าง, เวย์โปรตีน" 
+                     class="w-full bg-slate-950/80 border border-slate-800 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 rounded-xl px-3.5 py-2.5 text-sm transition outline-none placeholder:text-slate-600">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1.5">Calories (kcal)</label>
+                <input type="number" id="in-cal" required min="0" placeholder="0" 
+                       class="w-full bg-slate-950/80 border border-slate-800 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 rounded-xl px-3 py-2 text-sm transition outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1.5">Protein (g)</label>
+                <input type="number" id="in-protein" required min="0" placeholder="0" 
+                       class="w-full bg-slate-950/80 border border-slate-800 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 rounded-xl px-3 py-2 text-sm transition outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1.5">Fat (g)</label>
+                <input type="number" id="in-fat" required min="0" placeholder="0" 
+                       class="w-full bg-slate-950/80 border border-slate-800 focus:border-rose-400 focus:ring-1 focus:ring-rose-400 rounded-xl px-3 py-2 text-sm transition outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1.5">Carb (g)</label>
+                <input type="number" id="in-carb" required min="0" placeholder="0" 
+                       class="w-full bg-slate-950/80 border border-slate-800 focus:border-sky-400 focus:ring-1 focus:ring-sky-400 rounded-xl px-3 py-2 text-sm transition outline-none">
+              </div>
+            </div>
+
+            <button type="submit" id="btn-submit" 
+                    class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-semibold py-3 rounded-xl transition duration-200 shadow-lg shadow-amber-500/20 active:scale-[0.99] flex items-center justify-center gap-2">
+              <span>บันทึกเข้าระบบ</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- รายการมื้ออาหารวันนี้ -->
+        <div class="bg-slate-900/60 border border-slate-800/80 p-5 rounded-3xl backdrop-blur-xl">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-semibold text-slate-400 tracking-wider uppercase">มื้ออาหารล่าสุดของวันนี้</h3>
+            <span id="log-count" class="text-[11px] text-slate-500">0 รายการ</span>
+          </div>
+          <ul id="recent-logs" class="divide-y divide-slate-800/50 text-xs max-h-48 overflow-y-auto pr-1">
+            <li class="py-3 text-slate-500 text-center">กำลังโหลดข้อมูล...</li>
+          </ul>
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbza1XqfKpyHZjtYMc4bMZwNYAbCho6TnJjoAJliB9IWasEEvtnQ3DyKXIhVAwr25QC67Q/exec"
+    const TARGETS = {
+      cal: 2000,
+      protein: 140,
+      fat: 50,
+      carb: 250
+    };
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // โหลดแคชเดิมจาก LocalStorage ขึ้นมาแสดงทันที (Optimistic Display)
+    let state = JSON.parse(localStorage.getItem(`macro_day_${todayStr}`)) || {
+      totals: { cal: 0, protein: 0, fat: 0, carb: 0 },
+      logs: []
+    };
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-msg').innerText = msg;
+      toast.classList.remove('translate-y-[-150%]', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      setTimeout(() => {
+        toast.classList.add('translate-y-[-150%]', 'opacity-0');
+        toast.classList.remove('translate-y-0', 'opacity-100');
+      }, 3000);
+    }
+
+    function setSyncState(status) {
+      const dot = document.getElementById('sync-dot');
+      const txt = document.getElementById('sync-text');
+      const icon = document.getElementById('sync-icon');
+
+      if (status === 'syncing') {
+        dot.className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
+        txt.innerText = "กำลังซิงค์...";
+        icon.classList.add('animate-spin');
+      } else if (status === 'synced') {
+        dot.className = "w-2 h-2 rounded-full bg-emerald-400";
+        txt.innerText = "ข้อมูลตรงกับ Sheet";
+        icon.classList.remove('animate-spin');
+      } else {
+        dot.className = "w-2 h-2 rounded-full bg-rose-400";
+        txt.innerText = "ออฟไลน์ (ใช้ข้อมูลเครื่อง)";
+        icon.classList.remove('animate-spin');
+      }
+    }
+
+    function updateUI() {
+      const { totals, logs } = state;
+
+      ['cal', 'protein', 'fat', 'carb'].forEach(key => {
+        const val = totals[key] || 0;
+        const target = TARGETS[key];
+        const percent = Math.round((val / target) * 100);
+        const jar = document.getElementById(`jar-${key}`);
+        const txt = document.getElementById(`txt-${key}`);
+        const diff = document.getElementById(`diff-${key}`);
+        const unit = key === 'cal' ? 'kcal' : 'g';
+
+        jar.style.height = `${Math.min(100, Math.max(0, percent))}%`;
+        jar.innerText = `${percent}%`;
+        txt.innerText = `${val} / ${target}${unit}`;
+
+        if (val > target) {
+          jar.style.background = 'linear-gradient(to top, #dc2626, #f87171)';
+          diff.innerText = `เกิน +${val - target} ${unit}`;
+          diff.className = 'text-[10px] mt-0.5 truncate text-rose-400 font-bold';
+        } else {
+          jar.style.background = '';
+          diff.innerText = `ขาดอีก ${target - val} ${unit}`;
+          diff.className = 'text-[10px] mt-0.5 truncate text-slate-500';
+        }
+      });
+
+      // อัปเดตรายการอาหาร
+      const logContainer = document.getElementById('recent-logs');
+      document.getElementById('log-count').innerText = `${logs.length} รายการ`;
+
+      if (logs.length === 0) {
+        logContainer.innerHTML = '<li class="py-3 text-slate-500 text-center">ยังไม่มีรายการบันทึกของวันนี้</li>';
+      } else {
+        logContainer.innerHTML = logs.slice().reverse().map(item => `
+          <li class="py-2.5 flex items-center justify-between border-b border-slate-800/40 last:border-0">
+            <span class="font-medium text-slate-300 truncate max-w-[120px] sm:max-w-[160px]">${item.foodName}</span>
+            <div class="text-[11px] text-slate-400 flex items-center gap-2 font-mono">
+              <span class="text-amber-400">${item.cal}k</span>
+              <span class="text-emerald-400">${item.protein}P</span>
+              <span class="text-rose-400">${item.fat}F</span>
+              <span class="text-sky-400">${item.carb}C</span>
+            </div>
+          </li>
+        `).join('');
+      }
+    }
+
+    // ฟังก์ชันดึงข้อมูลสดจาก Google Sheet (doGet)
+    async function fetchSheetData() {
+      setSyncState('syncing');
+      try {
+        const res = await fetch(GAS_API_URL);
+        const data = await res.json();
+        
+        if (data.status === "success") {
+          // แทนที่ state ด้วยข้อมูลจริงจาก Sheet (หากในชีตมีการลบแถว ตัวเลขจะลดลงตรงนี้)
+          state.totals = data.totals;
+          state.logs = data.logs;
+          localStorage.setItem(`macro_day_${todayStr}`, JSON.stringify(state));
+          updateUI();
+          setSyncState('synced');
+        } else {
+          setSyncState('error');
+        }
+      } catch (err) {
+        console.warn("ไม่สามารถซิงค์ข้อมูลกับ Sheet ได้:", err);
+        setSyncState('error');
+      }
+    }
+
+    // จัดการฟอร์มบันทึก (Optimistic UI)
+    document.getElementById('food-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-submit');
+      btn.disabled = true;
+      btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-950" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg> กำลังส่งข้อมูล...`;
+
+      const payload = {
+        foodName: document.getElementById('in-food').value.trim(),
+        cal: Number(document.getElementById('in-cal').value) || 0,
+        protein: Number(document.getElementById('in-protein').value) || 0,
+        fat: Number(document.getElementById('in-fat').value) || 0,
+        carb: Number(document.getElementById('in-carb').value) || 0,
+      };
+
+      // 1. อัปเดตหน้าจอทันที ไม่ต้องรอเน็ตเวิร์ก
+      state.totals.cal += payload.cal;
+      state.totals.protein += payload.protein;
+      state.totals.fat += payload.fat;
+      state.totals.carb += payload.carb;
+      state.logs.push(payload);
+      localStorage.setItem(`macro_day_${todayStr}`, JSON.stringify(state));
+      updateUI();
+
+      // 2. ส่งข้อมูลไป Google Apps Script
+      try {
+        await fetch(GAS_API_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        showToast("บันทึกเข้าระบบแล้ว!");
+      } catch (err) {
+        console.error("ส่งข้อมูลไม่สำเร็จ:", err);
+      }
+
+      document.getElementById('food-form').reset();
+      btn.disabled = false;
+      btn.innerHTML = `<span>บันทึกเข้าระบบ</span>`;
+    });
+
+    // เริ่มต้น: วาดหน้าจอทันทีจาก LocalStorage แล้วแอบดึงข้อมูลล่าสุดจาก Sheet ในเบื้องหลัง
+    updateUI();
+    fetchSheetData();
+  </script>
+</body>
+</html>
